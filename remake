@@ -1,0 +1,298 @@
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let round = 1;
+let roundTimer = 99;
+let fightIntro = true;
+let screenShake = 0;
+let frame = 0;
+let koFreeze = 0;
+
+class Fighter {
+  constructor(x,color,isAI=false){
+    this.x=x; this.y=300;
+    this.w=60; this.h=120;
+    this.color=color;
+
+    this.health=100;
+    this.displayHealth=100;
+
+    this.super=0;
+    this.displaySuper=0;
+
+    this.vy=0;
+    this.speed=4;
+    this.jumpPower=-14;
+    this.isJump=false;
+
+    this.attack=null;
+    this.attackTimer=0;
+    this.hitstun=0;
+
+    this.combo=0;
+    this.comboTimer=0;
+
+    this.blocking=false;
+    this.knockback=0;
+    this.facing=1;
+
+    this.projectiles=[];
+    this.isAI=isAI;
+  }
+
+  update(opponent){
+    this.facing = this.x < opponent.x ? 1 : -1;
+
+    if(this.hitstun>0) this.hitstun--;
+
+    this.y+=this.vy;
+    this.vy+=0.7;
+    if(this.y>=300){ this.y=300; this.vy=0; this.isJump=false; }
+
+    this.x+=this.knockback;
+    this.knockback*=0.85;
+    this.x=Math.max(0,Math.min(canvas.width-this.w,this.x));
+
+    if(this.attackTimer>0) this.attackTimer--;
+
+    if(this.comboTimer>0) this.comboTimer--;
+    else this.combo=0;
+
+    this.projectiles.forEach(p=>p.x+=p.speed);
+    this.projectiles=this.projectiles.filter(p=>p.x>-50&&p.x<950);
+
+    if(this.displayHealth>this.health) this.displayHealth-=0.4;
+    if(this.displaySuper<this.super) this.displaySuper+=0.5;
+  }
+
+  draw(){
+    // shadow
+    ctx.fillStyle="rgba(0,0,0,0.3)";
+    ctx.beginPath();
+    ctx.ellipse(this.x+this.w/2,420,40,10,0,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.save();
+
+    if(this.hitstun>0) ctx.fillStyle="white";
+    else ctx.fillStyle=this.blocking?"gray":this.color;
+
+    ctx.fillRect(this.x,this.y,this.w,this.h);
+
+    // Punch animation
+    if(this.attack==="punch" && this.attackTimer>10){
+      ctx.fillRect(
+        this.x+(this.facing===1?this.w:-20),
+        this.y+30,
+        20,20
+      );
+    }
+
+    // Kick animation
+    if(this.attack==="kick" && this.attackTimer>10){
+      ctx.fillRect(
+        this.x+(this.facing===1?this.w:-30),
+        this.y+70,
+        30,15
+      );
+    }
+
+    ctx.restore();
+
+    // Draw fireballs
+    this.projectiles.forEach(p=>{
+      ctx.fillStyle="orange";
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,12,0,Math.PI*2);
+      ctx.fill();
+    });
+  }
+
+  jump(){
+    if(!this.isJump && this.hitstun===0){
+      this.vy=this.jumpPower;
+      this.isJump=true;
+    }
+  }
+
+  attackMove(type){
+    if(this.attackTimer===0 && this.hitstun===0){
+      this.attack=type;
+      this.attackTimer=20;
+    }
+  }
+
+  fireball(){
+    if(this.super>=30){
+      this.super-=30;
+      this.projectiles.push({
+        x:this.x+(this.facing===1?this.w:0),
+        y:this.y+60,
+        speed:this.facing*8
+      });
+    }
+  }
+
+  superMove(opponent){
+    if(this.super>=100){
+      this.super=0;
+      koFreeze=20;
+      opponent.health-=25;
+      opponent.hitstun=40;
+      opponent.knockback=this.facing*15;
+      screenShake=20;
+    }
+  }
+}
+
+const player=new Fighter(150,"blue");
+const cpu=new Fighter(700,"red",true);
+
+const keys={};
+document.addEventListener("keydown",e=>keys[e.key]=true);
+document.addEventListener("keyup",e=>keys[e.key]=false);
+
+function checkHit(attacker,defender){
+  if(attacker.attackTimer===15){
+    let range=50;
+    let hitX=attacker.x + (attacker.facing===1?attacker.w:-range);
+
+    if(hitX < defender.x+defender.w &&
+       hitX+range > defender.x &&
+       Math.abs(attacker.y-defender.y)<80){
+
+      let dmg=attacker.attack==="kick"?12:8;
+
+      if(defender.blocking){
+        dmg*=0.3;
+        defender.super+=5; // chip builds meter
+      }
+
+      defender.health-=dmg;
+      defender.hitstun=15;
+      defender.knockback=attacker.facing*8;
+
+      attacker.super+=10;
+      attacker.combo++;
+      attacker.comboTimer=60;
+
+      screenShake=8;
+    }
+  }
+
+  attacker.projectiles.forEach(p=>{
+    if(p.x>defender.x && p.x<defender.x+defender.w &&
+       p.y>defender.y && p.y<defender.y+defender.h){
+      defender.health-=15;
+      defender.hitstun=20;
+      defender.knockback=attacker.facing*10;
+      attacker.super+=15;
+      screenShake=12;
+      p.x=9999;
+    }
+  });
+}
+
+function cpuAI(){
+  let dist=Math.abs(cpu.x-player.x);
+
+  if(dist>120){
+    cpu.x+=cpu.facing*-2;
+  }else{
+    if(Math.random()<0.04) cpu.attackMove("punch");
+    if(Math.random()<0.03) cpu.attackMove("kick");
+    if(Math.random()<0.02) cpu.fireball();
+    cpu.blocking=Math.random()<0.05;
+  }
+
+  if(Math.random()<0.01) cpu.jump();
+}
+
+function updateUI(){
+  document.getElementById("p1bar").style.width=player.displayHealth*3+"px";
+  document.getElementById("p2bar").style.width=cpu.displayHealth*3+"px";
+  document.getElementById("p1meter").style.width=player.displaySuper*3+"px";
+  document.getElementById("p2meter").style.width=cpu.displaySuper*3+"px";
+  document.getElementById("roundInfo").textContent="Round "+round+" | "+roundTimer;
+}
+
+function resetRound(){
+  player.health=100; cpu.health=100;
+  player.displayHealth=100; cpu.displayHealth=100;
+  player.super=0; cpu.super=0;
+  player.x=150; cpu.x=700;
+  roundTimer=99;
+  fightIntro=true;
+  setTimeout(()=>fightIntro=false,1500);
+}
+
+function gameLoop(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  if(screenShake>0){
+    ctx.translate((Math.random()-0.5)*screenShake,
+                  (Math.random()-0.5)*screenShake);
+    screenShake*=0.9;
+  }
+
+  if(koFreeze>0){
+    koFreeze--;
+  } else if(!fightIntro && roundTimer>0){
+
+    if(keys["a"]) player.x-=player.speed;
+    if(keys["d"]) player.x+=player.speed;
+    if(keys["w"]) player.jump();
+    if(keys["j"]) player.attackMove("punch");
+    if(keys["k"]) player.attackMove("kick");
+    if(keys["l"]) player.fireball();
+    if(keys["i"]) player.superMove(cpu);
+    player.blocking=keys["s"];
+
+    cpuAI();
+  }
+
+  player.update(cpu);
+  cpu.update(player);
+
+  checkHit(player,cpu);
+  checkHit(cpu,player);
+
+  player.draw();
+  cpu.draw();
+
+  if(player.combo>1){
+    ctx.fillStyle="yellow";
+    ctx.font="30px Arial";
+    ctx.fillText(player.combo+" HIT COMBO!",50,200);
+  }
+
+  updateUI();
+
+  if(fightIntro){
+    ctx.fillStyle="black";
+    ctx.font="60px Arial";
+    ctx.fillText("FIGHT!",330,200);
+  }
+
+  if(!fightIntro && frame%60===0 && roundTimer>0)
+    roundTimer--;
+
+  if(player.health<=0||cpu.health<=0||roundTimer===0){
+    ctx.fillStyle="black";
+    ctx.font="50px Arial";
+    let winner =
+      player.health>cpu.health?"PLAYER WINS":
+      cpu.health>player.health?"CPU WINS":"DRAW";
+    ctx.fillText("KO!",380,150);
+    ctx.fillText(winner,300,220);
+    setTimeout(resetRound,2500);
+  }
+
+  frame++;
+  requestAnimationFrame(gameLoop);
+}
+
+resetRound();
+gameLoop();
+</script>
