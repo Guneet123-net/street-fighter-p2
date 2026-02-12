@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Street Brawler Ultra</title>
+<style>
+body { margin:0; background:#111; overflow:hidden; font-family:Arial; }
+canvas { display:block; margin:auto; background:linear-gradient(#6ec6ff,#e0e0e0); }
+#ui {
+ position:absolute; width:100%; top:10px; text-align:center; color:white;
+ font-weight:bold; font-size:18px;
+}
+.bar {
+ height:20px; background:red; margin:5px;
+ transition:width 0.2s;
+}
+.meter {
+ height:10px; background:cyan; margin:5px;
+}
+</style>
+</head>
+<body>
+
+<div id="ui">
+  <div>PLAYER</div>
+  <div class="bar" id="p1bar" style="width:300px;"></div>
+  <div class="meter" id="p1meter" style="width:0px;"></div>
+  <div>CPU</div>
+  <div class="bar" id="p2bar" style="width:300px;"></div>
+  <div class="meter" id="p2meter" style="width:0px;"></div>
+  <div id="roundInfo">Round 1</div>
+</div>
+
+<canvas id="game" width="900" height="450"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let round = 1;
+let p1Wins = 0;
+let p2Wins = 0;
+
+class Fighter {
+  constructor(x,color,isAI=false){
+    this.x=x; this.y=300;
+    this.w=60; this.h=120;
+    this.color=color;
+    this.health=100;
+    this.displayHealth=100;
+    this.super=0;
+    this.vy=0;
+    this.speed=5;
+    this.jumpPower=-14;
+    this.isJump=false;
+    this.attack=null;
+    this.blocking=false;
+    this.combo=0;
+    this.knockback=0;
+    this.isAI=isAI;
+    this.projectiles=[];
+  }
+
+  draw(){
+    ctx.fillStyle=this.blocking?"gray":this.color;
+    ctx.fillRect(this.x,this.y,this.w,this.h);
+
+    this.projectiles.forEach(p=>{
+      ctx.fillStyle="orange";
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,10,0,Math.PI*2);
+      ctx.fill();
+    });
+  }
+
+  update(){
+    this.y+=this.vy;
+    this.vy+=0.6;
+    if(this.y>=300){ this.y=300; this.vy=0; this.isJump=false; }
+
+    this.x+=this.knockback;
+    this.knockback*=0.8;
+
+    this.projectiles.forEach(p=>p.x+=p.speed);
+    this.projectiles=this.projectiles.filter(p=>p.x>-50&&p.x<950);
+
+    if(this.displayHealth>this.health)
+      this.displayHealth-=0.5;
+  }
+
+  jump(){
+    if(!this.isJump){ this.vy=this.jumpPower; this.isJump=true; }
+  }
+
+  punch(){ this.attack="punch"; }
+  kick(){ this.attack="kick"; }
+
+  fireball(){
+    if(this.super>=50){
+      this.super-=50;
+      this.projectiles.push({
+        x:this.x+(this.color==="blue"?this.w:0),
+        y:this.y+50,
+        speed:this.color==="blue"?8:-8
+      });
+      playSound(200);
+    }
+  }
+}
+
+const player=new Fighter(150,"blue");
+const cpu=new Fighter(700,"red",true);
+
+const keys={};
+document.addEventListener("keydown",e=>keys[e.key]=true);
+document.addEventListener("keyup",e=>keys[e.key]=false);
+
+function playSound(freq){
+  const ctxAudio=new (window.AudioContext||window.webkitAudioContext)();
+  const osc=ctxAudio.createOscillator();
+  osc.type="square";
+  osc.frequency.value=freq;
+  osc.connect(ctxAudio.destination);
+  osc.start();
+  setTimeout(()=>osc.stop(),100);
+}
+
+function checkHit(attacker,defender){
+  if(attacker.attack &&
+     attacker.x < defender.x+defender.w &&
+     attacker.x+attacker.w > defender.x &&
+     Math.abs(attacker.y-defender.y)<80){
+
+    let dmg=attacker.attack==="kick"?12:6;
+
+    if(defender.blocking) dmg/=2;
+
+    defender.health-=dmg;
+    defender.knockback=(attacker.color==="blue"?5:-5);
+    attacker.super+=10;
+    attacker.combo++;
+    playSound(100);
+    attacker.attack=null;
+  }
+
+  attacker.projectiles.forEach(p=>{
+    if(p.x>defender.x && p.x<defender.x+defender.w &&
+       p.y>defender.y && p.y<defender.y+defender.h){
+      defender.health-=15;
+      attacker.super+=15;
+      playSound(300);
+      p.x=9999;
+    }
+  });
+}
+
+function cpuAI(){
+  if(cpu.health<=0) return;
+
+  if(cpu.x>player.x+80) cpu.x-=2;
+  else if(cpu.x<player.x-80) cpu.x+=2;
+
+  if(Math.random()<0.02) cpu.jump();
+  if(Math.random()<0.03) cpu.punch();
+  if(Math.random()<0.02) cpu.kick();
+  if(Math.random()<0.01) cpu.fireball();
+  cpu.blocking=Math.random()<0.02;
+}
+
+function updateUI(){
+  document.getElementById("p1bar").style.width=player.displayHealth*3+"px";
+  document.getElementById("p2bar").style.width=cpu.displayHealth*3+"px";
+  document.getElementById("p1meter").style.width=player.super*3+"px";
+  document.getElementById("p2meter").style.width=cpu.super*3+"px";
+}
+
+function resetRound(){
+  player.health=100; cpu.health=100;
+  player.displayHealth=100; cpu.displayHealth=100;
+  player.x=150; cpu.x=700;
+  round++;
+  document.getElementById("roundInfo").textContent="Round "+round;
+}
+
+function gameLoop(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  if(keys["a"]) player.x-=player.speed;
+  if(keys["d"]) player.x+=player.speed;
+  if(keys["w"]) player.jump();
+  if(keys["j"]) player.punch();
+  if(keys["k"]) player.kick();
+  if(keys["l"]) player.fireball();
+  player.blocking=keys["s"];
+
+  player.update();
+  cpu.update();
+  cpuAI();
+
+  checkHit(player,cpu);
+  checkHit(cpu,player);
+
+  player.draw();
+  cpu.draw();
+
+  updateUI();
+
+  if(player.health<=0||cpu.health<=0){
+    if(player.health<=0) p2Wins++; else p1Wins++;
+
+    if(p1Wins===2||p2Wins===2){
+      ctx.fillStyle="black";
+      ctx.font="50px Arial";
+      ctx.fillText(p1Wins===2?"PLAYER WINS MATCH!":"CPU WINS MATCH!",200,200);
+      return;
+    }
+
+    setTimeout(resetRound,1500);
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
