@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PIXEL CLASH</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --p1-color: #00cfff;
+    --p2-color: #ff4444;
+    --gold: #ffd700;
+    --bg-dark: #0a0010;
+    --neon-glow: 0 0 10px, 0 0 20px, 0 0 40px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-dark);
+    font-family: 'Press Start 2P', monospace;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+  }
+
+  /* CRT scanline effect */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  #wrapper {
+    width: 900px;
+    max-width: 100vw;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* ===== TITLE ===== */
+  #title {
+    text-align: center;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 8px;
+    color: var(--gold);
+    text-shadow: 0 0 10px var(--gold), 0 0 30px var(--gold), 0 0 60px #ff8800;
+    animation: flicker 4s infinite;
+    padding: 6px 0;
+  }
+
+  @keyframes flicker {
+    0%,95%,100% { opacity: 1; }
+    96% { opacity: 0.6; }
+    97% { opacity: 1; }
+    98% { opacity: 0.4; }
+    99% { opacity: 1; }
+  }
+
+  /* ===== HUD ===== */
+  #hud {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 4px;
+  }
+
+  .health-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .player-label {
+    font-size: 7px;
+    letter-spacing: 2px;
+  }
+
+  .p1-label { color: var(--p1-color); text-shadow: 0 0 8px var(--p1-color); }
+  .p2-label { color: var(--p2-color); text-align: right; text-shadow: 0 0 8px var(--p2-color); }
+
+  .health-bar-outer {
+    height: 22px;
+    background: #111;
+    border: 2px solid #333;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .health-bar-fill {
+    height: 100%;
+    transition: width 0.1s ease;
+    position: relative;
+  }
+
+  #p1-health-fill {
+    background: linear-gradient(90deg, #00ff88, #00cfff);
+    box-shadow: 0 0 8px #00cfff;
+  }
+
+  #p2-health-fill {
+    background: linear-gradient(270deg, #ff8800, #ff4444);
+    box-shadow: 0 0 8px #ff4444;
+    margin-left: auto;
+    float: right;
+  }
+
+  .health-bar-outer.p2 { direction: rtl; }
+
+  /* Timer & Round */
+  #center-hud {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 90px;
+  }
+
+  #timer {
+    font-size: 28px;
+    color: var(--gold);
+    text-shadow: 0 0 10px var(--gold);
+    min-width: 60px;
+    text-align: center;
+  }
+
+  #round-display {
+    font-size: 6px;
+    color: #aaa;
+    letter-spacing: 1px;
+  }
+
+  .round-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    border: 1px solid #555;
+    margin: 0 2px;
+  }
+  .round-dot.won { background: var(--gold); border-color: var(--gold); }
+
+  /* ===== GAME CANVAS ===== */
+  #game-canvas {
+    position: relative;
+    width: 100%;
+    height: 380px;
+    background: #000;
+    overflow: hidden;
+    border: 3px solid #333;
+    box-shadow: 0 0 20px rgba(100,0,200,0.4), inset 0 0 40px rgba(0,0,0,0.8);
+  }
+
+  /* Sky gradient */
+  #bg-layer {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, #0d0028 0%, #1a0040 30%, #2d0060 60%, #1a0030 100%);
+  }
+
+  /* Pixel buildings BG */
+  #city-bg {
+    position: absolute;
+    bottom: 80px;
+    left: 0;
+    width: 100%;
+    height: 200px;
+    opacity: 0.5;
+  }
+
+  /* Stars */
+  .star {
+    position: absolute;
+    width: 2px; height: 2px;
+    background: white;
+    border-radius: 50%;
+    animation: twinkle 2s infinite;
+  }
+  @keyframes twinkle {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+
+  /* Neon moon */
+  #moon {
+    position: absolute;
+    top: 20px;
+    right: 80px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fff9c4, #ffd700);
+    box-shadow: 0 0 20px #ffd700, 0 0 40px #ffd70066;
+  }
+
+  /* Ground */
+  #ground {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 80px;
+    background: repeating-linear-gradient(
+      90deg,
+      #1a0040 0px, #1a0040 60px,
+      #200050 60px, #200050 120px
+    );
+    border-top: 4px solid #6600ff;
+    box-shadow: 0 -4px 20px #6600ff88, 0 -8px 40px #6600ff44;
+  }
+
+  /* Grid lines on ground */
+  #ground::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent 0px,
+      transparent 18px,
+      rgba(100,0,255,0.3) 18px,
+      rgba(100,0,255,0.3) 20px
+    );
+  }
+
+  /* ===== FIGHTERS ===== */
+  .fighter {
+    position: absolute;
+    bottom: 80px;
+    width: 60px;
+    height: 100px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: transform 0.05s;
+  }
+
+  .fighter-sprite {
+    width: 100%;
+    height: 100%;
+    position: relative;
+  }
+
+  /* P1 - Blue ninja */
+  #p1 { left: 80px; }
+  #p1 .body { background: var(--p1-color); box-shadow: 0 0 10px var(--p1-color); }
+  #p1 .head { background: #99eeff; box-shadow: 0 0 8px var(--p1-color); }
+  #p1 .belt { background: #ffd700; }
+  #p1 .leg { background: #0088aa; }
+
+  /* P2 - Red warrior */
+  #p2 { right: 80px; }
+  #p2 .body { background: var(--p2-color); box-shadow: 0 0 10px var(--p2-color); }
+  #p2 .head { background: #ffaaaa; box-shadow: 0 0 8px var(--p2-color); }
+  #p2 .belt { background: #333; }
+  #p2 .leg { background: #880000; }
+
+  /* Pixel art body parts */
+  .head {
+    width: 30px; height: 30px;
+    border-radius: 4px;
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    image-rendering: pixelated;
+  }
+
+  .body {
+    width: 36px; height: 36px;
+    position: absolute;
+    top: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 4px 4px 0 0;
+  }
+
+  .belt {
+    width: 36px; height: 6px;
+    position: absolute;
+    top: 58px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .leg {
+    width: 14px; height: 36px;
+    position: absolute;
+    top: 64px;
+    border-radius: 0 0 4px 4px;
+  }
+
+  .leg-l { left: 50%; margin-left: -16px; }
+  .leg-r { left: 50%; margin-left: 2px; }
+
+  .arm {
+    width: 10px; height: 28px;
+    position: absolute;
+    top: 30px;
+    border-radius: 4px;
+  }
+
+  #p1 .arm { background: #0099cc; }
+  #p2 .arm { background: #cc0000; }
+
+  .arm-l { left: 50%; margin-left: -24px; }
+  .arm-r { left: 50%; margin-left: 14px; }
+
+  /* Fighter states via CSS classes */
+  .fighter.idle .body { animation: idle-bob 0.8s ease-in-out infinite; }
+
+  @keyframes idle-bob {
+    0%,100% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(-2px); }
+  }
+
+  .fighter.punch-fwd .arm-r {
+    animation: punch-out 0.3s ease-out;
+  }
+
+  @keyframes punch-out {
+    0% { transform: translateX(0) scaleY(1); }
+    40% { transform: translateX(30px) scaleY(0.9); height: 28px; }
+    100% { transform: translateX(0) scaleY(1); }
+  }
+
+  .fighter.flipped { transform: scaleX(-1); }
+  .fighter.flipped .fighter-sprite { transform: scaleX(1); }
+
+  /* Jump */
+  .fighter.jumping {
+    animation: jump 0.5s ease-out;
+  }
+
+  @keyframes jump {
+    0% { bottom: 80px; }
+    40% { bottom: 190px; }
+    100% { bottom: 80px; }
+  }
+
+  /* Crouch */
+  .fighter.crouching {
+    transform: scaleY(0.7);
+    transform-origin: bottom center;
+  }
+
+  /* Hit flash */
+  .fighter.hit {
+    animation: hit-flash 0.2s ease-out;
+  }
+
+  @keyframes hit-flash {
+    0%,100% { filter: brightness(1); }
+    50% { filter: brightness(3) saturate(0); }
+  }
+
+  /* KO */
+  .fighter.ko {
+    animation: ko-fall 0.6s ease-out forwards;
+  }
+  @keyframes ko-fall {
+    0% { transform: rotate(0); opacity: 1; }
+    100% { transform: rotate(90deg); opacity: 0.5; }
+  }
+
+  /* ===== EFFECTS ===== */
+  .hit-effect {
+    position: absolute;
+    font-size: 20px;
+    font-weight: bold;
+    font-family: 'Orbitron', sans-serif;
+    pointer-events: none;
+    animation: float-up 0.8s ease-out forwards;
+    z-index: 10;
+    text-shadow: 2px 2px 0 #000;
+  }
+
+  @keyframes float-up {
+    0% { transform: translateY(0) scale(0.5); opacity: 1; }
+    100% { transform: translateY(-60px) scale(1.2); opacity: 0; }
+  }
+
+  .hit-spark {
+    position: absolute;
+    width: 40px; height: 40px;
+    pointer-events: none;
+    animation: spark 0.3s ease-out forwards;
+    z-index: 10;
+  }
+
+  @keyframes spark {
+    0% { transform: scale(0); opacity: 1; }
+    100% { transform: scale(2); opacity: 0; }
+  }
+
+  /* ===== OVERLAY SCREENS ===== */
+  #overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+  }
+
+  #overlay h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 36px;
+    color: var(--gold);
+    text-shadow: 0 0 20px var(--gold), 0 0 40px #ff8800;
+    letter-spacing: 6px;
+    animation: zoom-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    margin-bottom: 12px;
+  }
+
+  @keyframes zoom-in {
+    0% { transform: scale(0.2); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  #overlay p {
+    font-size: 9px;
+    color: #aaa;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+  }
+
+  #overlay .subtitle {
+    font-size: 11px;
+    color: var(--gold);
+    letter-spacing: 3px;
+  }
+
+  #start-btn {
+    margin-top: 16px;
+    padding: 12px 28px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 11px;
+    background: transparent;
+    border: 3px solid var(--gold);
+    color: var(--gold);
+    cursor: pointer;
+    letter-spacing: 2px;
+    transition: all 0.2s;
+    text-shadow: 0 0 8px var(--gold);
+    box-shadow: 0 0 10px var(--gold)44, inset 0 0 10px transparent;
+    animation: pulse-btn 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse-btn {
+    0%,100% { box-shadow: 0 0 10px var(--gold)44; }
+    50% { box-shadow: 0 0 20px var(--gold)88, 0 0 40px var(--gold)44; }
+  }
+
+  #start-btn:hover {
+    background: var(--gold)22;
+    box-shadow: 0 0 30px var(--gold)88;
+    transform: scale(1.05);
+  }
+
+  /* ===== CONTROLS ===== */
+  #controls {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 4px;
+    font-size: 6px;
+    color: #555;
+    letter-spacing: 1px;
+  }
+
+  .ctrl-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .ctrl-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  kbd {
+    background: #1a1a1a;
+    border: 1px solid #444;
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 5px;
+    color: #888;
+  }
+
+  /* FIGHT text animation */
+  #fight-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 60px;
+    font-weight: 900;
+    color: var(--gold);
+    text-shadow: 0 0 20px var(--gold), 0 0 60px #ff8800, 4px 4px 0 #ff0000;
+    z-index: 50;
+    pointer-events: none;
+    display: none;
+  }
+
+  /* Combo display */
+  #combo-display {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: #ff8800;
+    text-shadow: 0 0 10px #ff8800;
+    z-index: 20;
+    pointer-events: none;
+    display: none;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+
+  /* Energy bars */
+  #special-bars {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 4px;
+    gap: 10px;
+  }
+
+  .special-bar-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .special-label {
+    font-size: 5px;
+    color: #666;
+    letter-spacing: 1px;
+  }
+
+  .special-bar-outer {
+    height: 8px;
+    background: #111;
+    border: 1px solid #333;
+    overflow: hidden;
+  }
+
+  #p1-special-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ff8800, #ffdd00);
+    box-shadow: 0 0 6px #ff8800;
+    transition: width 0.2s;
+    width: 0%;
+  }
+
+  #p2-special-fill {
+    height: 100%;
+    background: linear-gradient(270deg, #ff4400, #ff0088);
+    box-shadow: 0 0 6px #ff4400;
+    transition: width 0.2s;
+    width: 0%;
+    float: right;
+  }
+
+  .p2-special-bar .special-bar-outer { direction: rtl; }
+
+  /* Special flash */
+  #special-flash {
+    position: absolute;
+    inset: 0;
+    background: white;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 80;
+    transition: opacity 0.1s;
+  }
+</style>
+</head>
+<body>
+<div id="wrapper">
+  <div id="title">⚡ PIXEL CLASH ⚡</div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div class="health-container">
+      <div class="player-label p1-label">RYUKO</div>
+      <div class="health-bar-outer" id="p1-health-bar">
+        <div class="health-bar-fill" id="p1-health-fill" style="width:100%"></div>
+      </div>
+    </div>
+
+    <div id="center-hud">
+      <div id="timer">99</div>
+      <div id="round-display">
+        <span class="round-dot" id="p1-r1"></span>
+        <span style="color:#444;font-size:8px">VS</span>
+        <span class="round-dot" id="p2-r1"></span>
+      </div>
+    </div>
+
+    <div class="health-container">
+      <div class="player-label p2-label">KAGE</div>
+      <div class="health-bar-outer p2" id="p2-health-bar">
+        <div class="health-bar-fill" id="p2-health-fill" style="width:100%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Special bars -->
+  <div id="special-bars">
+    <div class="special-bar-container">
+      <div class="special-label">⚡ POWER</div>
+      <div class="special-bar-outer">
+        <div id="p1-special-fill"></div>
+      </div>
+    </div>
+    <div class="special-bar-container p2-special-bar" style="align-items:flex-end">
+      <div class="special-label" style="text-align:right">POWER ⚡</div>
+      <div class="special-bar-outer" style="width:100%">
+        <div id="p2-special-fill"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Canvas -->
+  <div id="game-canvas">
+    <div id="special-flash"></div>
+    <div id="bg-layer"></div>
+    <div id="moon"></div>
+    <svg id="city-bg" viewBox="0 0 900 200" preserveAspectRatio="none">
+      <!-- Pixel city silhouette -->
+      <rect x="0" y="120" width="40" height="80" fill="#1a0050"/>
+      <rect x="5" y="100" width="30" height="20" fill="#1a0050"/>
+      <rect x="45" y="60" width="50" height="140" fill="#200060"/>
+      <rect x="50" y="40" width="10" height="20" fill="#200060"/>
+      <rect x="58" y="30" width="6" height="12" fill="#ff4400" opacity="0.8"/>
+      <rect x="100" y="80" width="60" height="120" fill="#150040"/>
+      <rect x="120" y="60" width="20" height="20" fill="#150040"/>
+      <rect x="165" y="40" width="80" height="160" fill="#1d0055"/>
+      <rect x="180" y="20" width="12" height="22" fill="#1d0055"/>
+      <rect x="184" y="12" width="4" height="10" fill="#ff8800" opacity="0.9"/>
+      <!-- Windows -->
+      <rect x="168" y="50" width="8" height="8" fill="#ffd700" opacity="0.6"/>
+      <rect x="180" y="50" width="8" height="8" fill="#00cfff" opacity="0.5"/>
+      <rect x="192" y="50" width="8" height="8" fill="#ffd700" opacity="0.4"/>
+      <rect x="168" y="70" width="8" height="8" fill="#00cfff" opacity="0.7"/>
+      <rect x="192" y="70" width="8" height="8" fill="#ffd700" opacity="0.6"/>
+      <rect x="250" y="90" width="70" height="110" fill="#180048"/>
+      <rect x="265" y="70" width="40" height="22" fill="#180048"/>
+      <rect x="255" y="100" width="8" height="8" fill="#00cfff" opacity="0.5"/>
+      <rect x="270" y="100" width="8" height="8" fill="#ffd700" opacity="0.6"/>
+      <rect x="285" y="100" width="8" height="8" fill="#ff4400" opacity="0.5"/>
+      <rect x="300" y="100" width="8" height="8" fill="#00cfff" opacity="0.4"/>
+      <rect x="320" y="50" width="100" height="150" fill="#220065"/>
+      <rect x="340" y="30" width="20" height="22" fill="#220065"/>
+      <rect x="348" y="20" width="6" height="12" fill="#ff0044" opacity="0.9"/>
+      <rect x="330" y="60" width="8" height="8" fill="#ffd700" opacity="0.7"/>
+      <rect x="345" y="60" width="8" height="8" fill="#00cfff" opacity="0.6"/>
+      <rect x="360" y="60" width="8" height="8" fill="#ffd700" opacity="0.5"/>
+      <rect x="375" y="60" width="8" height="8" fill="#ff8800" opacity="0.5"/>
+      <rect x="330" y="80" width="8" height="8" fill="#00cfff" opacity="0.4"/>
+      <rect x="360" y="80" width="8" height="8" fill="#ffd700" opacity="0.6"/>
+      <!-- Right side -->
+      <rect x="420" y="70" width="80" height="130" fill="#1c0058"/>
+      <rect x="440" y="50" width="40" height="22" fill="#1c0058"/>
+      <rect x="435" y="80" width="8" height="8" fill="#ffd700" opacity="0.5"/>
+      <rect x="450" y="80" width="8" height="8" fill="#00cfff" opacity="0.6"/>
+      <rect x="465" y="80" width="8" height="8" fill="#ffd700" opacity="0.4"/>
+      <rect x="480" y="80" width="8" height="8" fill="#ff8800" opacity="0.5"/>
+      <rect x="505" y="40" width="60" height="160" fill="#200062"/>
+      <rect x="525" y="20" width="20" height="22" fill="#200062"/>
+      <rect x="532" y="10" width="6" height="12" fill="#ffd700" opacity="0.9"/>
+      <rect x="510" y="50" width="8" height="8" fill="#00cfff" opacity="0.7"/>
+      <rect x="525" y="50" width="8" height="8" fill="#ffd700" opacity="0.6"/>
+      <rect x="540" y="50" width="8" height="8" fill="#ff4400" opacity="0.5"/>
+      <rect x="555" y="50" width="8" height="8" fill="#00cfff" opacity="0.4"/>
+      <rect x="570" y="80" width="90" height="120" fill="#170045"/>
+      <rect x="590" y="60" width="50" height="22" fill="#170045"/>
+      <rect x="575" y="90" width="8" height="8" fill="#ffd700" opacity="0.6"/>
+      <rect x="590" y="90" width="8" height="8" fill="#00cfff" opacity="0.5"/>
+      <rect x="605" y="90" width="8" height="8" fill="#ffd700" opacity="0.7"/>
+      <rect x="665" y="50" width="75" height="150" fill="#1e0060"/>
+      <rect x="680" y="30" width="45" height="22" fill="#1e0060"/>
+      <rect x="700" y="18" width="6" height="14" fill="#ff0066" opacity="0.9"/>
+      <rect x="670" y="60" width="8" height="8" fill="#00cfff" opacity="0.6"/>
+      <rect x="685" y="60" width="8" height="8" fill="#ffd700" opacity="0.5"/>
+      <rect x="700" y="60" width="8" height="8" fill="#ff8800" opacity="0.6"/>
+      <rect x="715" y="60" width="8" height="8" fill="#ffd700" opacity="0.4"/>
+      <rect x="745" y="90" width="60" height="110" fill="#160042"/>
+      <rect x="760" y="70" width="30" height="22" fill="#160042"/>
+      <rect x="750" y="100" width="8" height="8" fill="#00cfff" opacity="0.5"/>
+      <rect x="765" y="100" width="8" height="8" fill="#ffd700" opacity="0.6"/>
+      <rect x="780" y="100" width="8" height="8" fill="#ff4400" opacity="0.4"/>
+      <rect x="810" y="60" width="90" height="140" fill="#200058"/>
+      <rect x="830" y="40" width="50" height="22" fill="#200058"/>
+      <rect x="850" y="28" width="6" height="14" fill="#00cfff" opacity="0.9"/>
+      <rect x="815" y="70" width="8" height="8" fill="#ffd700" opacity="0.6"/>
+      <rect x="830" y="70" width="8" height="8" fill="#00cfff" opacity="0.7"/>
+      <rect x="845" y="70" width="8" height="8" fill="#ffd700" opacity="0.5"/>
+      <rect x="860" y="70" width="8" height="8" fill="#ff8800" opacity="0.4"/>
+    </svg>
+
+    <!-- Fighters -->
+    <div class="fighter idle" id="p1">
+      <div class="fighter-sprite">
+        <div class="head"></div>
+        <div class="body"></div>
+        <div class="belt"></div>
+        <div class="arm arm-l"></div>
+        <div class="arm arm-r" id="p1-arm-r"></div>
+        <div class="leg leg-l"></div>
+        <div class="leg leg-r"></div>
+      </div>
+    </div>
+
+    <div class="fighter idle flipped" id="p2">
+      <div class="fighter-sprite">
+        <div class="head"></div>
+        <div class="body"></div>
+        <div class="belt"></div>
+        <div class="arm arm-l"></div>
+        <div class="arm arm-r"></div>
+        <div class="leg leg-l"></div>
+        <div class="leg leg-r"></div>
+      </div>
+    </div>
+
+    <div id="ground"></div>
+
+    <!-- Fight text -->
+    <div id="fight-text">FIGHT!</div>
+
+    <!-- Combo display -->
+    <div id="combo-display"></div>
+
+    <!-- Overlay -->
+    <div id="overlay">
+      <h1>PIXEL CLASH</h1>
+      <p>A STREET FIGHTER TRIBUTE</p>
+      <div class="subtitle" style="margin-bottom:8px;">ROUND 1</div>
+      <p>PLAYER 1: A/D=MOVE  W=JUMP  S=CROUCH</p>
+      <p>Q=PUNCH  E=KICK  R=SPECIAL</p>
+      <p style="margin-top:6px;">PLAYER 2: ←/→=MOVE  ↑=JUMP  ↓=CROUCH</p>
+      <p>1=PUNCH  2=KICK  3=SPECIAL</p>
+      <button id="start-btn" onclick="startGame()">▶ FIGHT!</button>
+    </div>
+  </div>
+
+  <!-- Controls reminder -->
+  <div id="controls">
+    <div class="ctrl-group">
+      <div style="color:#00cfff;margin-bottom:3px;">P1: RYUKO</div>
+      <div class="ctrl-row"><kbd>A</kbd><kbd>D</kbd> MOVE &nbsp; <kbd>W</kbd> JUMP &nbsp; <kbd>S</kbd> CROUCH</div>
+      <div class="ctrl-row"><kbd>Q</kbd> PUNCH &nbsp; <kbd>E</kbd> KICK &nbsp; <kbd>R</kbd> SPECIAL</div>
+    </div>
+    <div class="ctrl-group" style="align-items:flex-end">
+      <div style="color:#ff4444;margin-bottom:3px;">P2: KAGE</div>
+      <div class="ctrl-row"><kbd>←</kbd><kbd>→</kbd> MOVE &nbsp; <kbd>↑</kbd> JUMP &nbsp; <kbd>↓</kbd> CROUCH</div>
+      <div class="ctrl-row"><kbd>1</kbd> PUNCH &nbsp; <kbd>2</kbd> KICK &nbsp; <kbd>3</kbd> SPECIAL</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== GAME STATE =====
+const CANVAS_W = 900;
+const CANVAS_H = 380;
+const GROUND_Y = 80;
+const FIGHTER_W = 60;
+const SPEED = 4;
+const JUMP_FORCE = 12;
+const GRAVITY = 0.6;
+
+let gameRunning = false;
+let timerInterval = null;
+let timeLeft = 99;
+let p1Wins = 0;
+let p2Wins = 0;
+let roundNum = 1;
+
+// Add stars dynamically
+const bgLayer = document.getElementById('bg-layer');
+for (let i = 0; i < 40; i++) {
+  const star = document.createElement('div');
+  star.className = 'star';
+  star.style.left = Math.random() * 100 + '%';
+  star.style.top = Math.random() * 60 + '%';
+  star.style.animationDelay = Math.random() * 3 + 's';
+  star.style.animationDuration = (1.5 + Math.random() * 2) + 's';
+  bgLayer.appendChild(star);
+}
+
+const state = {
+  p1: {
+    el: document.getElementById('p1'),
+    x: 80,
+    y: 0,
+    vy: 0,
+    hp: 100,
+    special: 0,
+    maxHp: 100,
+    jumping: false,
+    crouching: false,
+    facing: 1, // 1=right, -1=left
+    attacking: false,
+    attackCooldown: 0,
+    invincible: 0,
+    combo: 0,
+    lastHitTime: 0,
+    blocking: false
+  },
+  p2: {
+    el: document.getElementById('p2'),
+    x: 760,
+    y: 0,
+    vy: 0,
+    hp: 100,
+    special: 0,
+    maxHp: 100,
+    jumping: false,
+    crouching: false,
+    facing: -1,
+    attacking: false,
+    attackCooldown: 0,
+    invincible: 0,
+    combo: 0,
+    lastHitTime: 0,
+    blocking: false
+  }
+};
+
+const keys = {};
+
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space'].includes(e.code)) {
+    e.preventDefault();
+  }
+  if (!gameRunning) return;
+  // Attack inputs
+  if (e.code === 'KeyQ') attack(state.p1, state.p2, 'punch');
+  if (e.code === 'KeyE') attack(state.p1, state.p2, 'kick');
+  if (e.code === 'KeyR') specialMove(state.p1, state.p2);
+  if (e.code === 'Digit1') attack(state.p2, state.p1, 'punch');
+  if (e.code === 'Digit2') attack(state.p2, state.p1, 'kick');
+  if (e.code === 'Digit3') specialMove(state.p2, state.p1);
+});
+
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// ===== ATTACK =====
+function getDistance(p1, p2) {
+  return Math.abs(p1.x - p2.x);
+}
+
+function attack(attacker, defender, type) {
+  if (!gameRunning) return;
+  if (attacker.attackCooldown > 0) return;
+  if (attacker.crouching) return;
+
+  const dist = getDistance(attacker, defender);
+  const reach = type === 'kick' ? 95 : 80;
+  
+  attacker.attacking = true;
+  attacker.attackCooldown = type === 'special' ? 40 : 18;
+
+  // Visual attack animation
+  const el = attacker.el;
+  el.classList.remove('idle');
+  el.classList.add('punch-fwd');
+  setTimeout(() => {
+    el.classList.remove('punch-fwd');
+    el.classList.add('idle');
+  }, 300);
+
+  if (dist < reach) {
+    let dmg = type === 'punch' ? 8 : 14;
+    
+    // Crouching reduces damage
+    if (defender.crouching) dmg = Math.floor(dmg * 1.3); // crouching is vulnerable to kicks
+    if (type === 'punch' && defender.crouching) dmg = Math.floor(dmg * 0.3);
+
+    // Combo system
+    const now = Date.now();
+    if (now - attacker.lastHitTime < 1500) {
+      attacker.combo++;
+      if (attacker.combo >= 3) {
+        const bonus = Math.floor(attacker.combo * 0.5);
+        dmg += bonus;
+      }
+    } else {
+      attacker.combo = 1;
+    }
+    attacker.lastHitTime = now;
+
+    applyDamage(defender, attacker, dmg, type);
+
+    // Build special meter
+    attacker.special = Math.min(100, attacker.special + 12);
+    updateSpecialBars();
+
+    if (attacker.combo >= 3) {
+      showCombo(attacker.combo, attacker === state.p1 ? 250 : 600, 100);
+    }
+  }
+}
+
+function specialMove(attacker, defender) {
+  if (attacker.special < 100) {
+    // Show "NOT READY" flash
+    const el = attacker === state.p1 ? document.getElementById('p1-special-fill') : document.getElementById('p2-special-fill');
+    el.style.boxShadow = '0 0 20px red';
+    setTimeout(() => el.style.boxShadow = '', 300);
+    return;
+  }
+  attacker.special = 0;
+  updateSpecialBars();
+
+  // White flash
+  const flash = document.getElementById('special-flash');
+  flash.style.opacity = '0.9';
+  setTimeout(() => flash.style.opacity = '0', 200);
+
+  const dist = getDistance(attacker, defender);
+  const dmg = dist < 140 ? 28 : 12; // projectile still does some dmg
+
+  // Show special effect text
+  const x = attacker === state.p1 ? attacker.x + 60 : attacker.x - 30;
+  showHitEffect('HADOUKEN!', x, 120, '#ff8800', 22);
+
+  applyDamage(defender, attacker, dmg, 'special');
+  attacker.combo = 0;
+}
+
+function applyDamage(defender, attacker, dmg, type) {
+  if (defender.invincible > 0) return;
+  
+  defender.hp = Math.max(0, defender.hp - dmg);
+  defender.invincible = 12;
+
+  // Hit flash
+  defender.el.classList.remove('idle');
+  defender.el.classList.add('hit');
+  setTimeout(() => {
+    defender.el.classList.remove('hit');
+    if (defender.hp > 0) defender.el.classList.add('idle');
+  }, 200);
+
+  // Knockback
+  const dir = defender === state.p1 ? -1 : 1;
+  defender.x = Math.max(20, Math.min(CANVAS_W - FIGHTER_W - 20, defender.x + dir * 25));
+
+  updateHealthBars();
+
+  // Hit effect visual
+  const ex = defender === state.p1 ? defender.x + 30 : defender.x - 10;
+  const ey = CANVAS_H - GROUND_Y - 80;
+  const hitTexts = { punch: ['HIT!','SMACK!','POW!'], kick: ['KICK!','BAM!','THWACK!'], special: ['SPECIAL!','ULTRA!'] };
+  const arr = hitTexts[type] || ['HIT!'];
+  const txt = arr[Math.floor(Math.random() * arr.length)];
+  const col = type === 'special' ? '#ff8800' : (type === 'kick' ? '#ff4444' : '#ffd700');
+  showHitEffect(txt, ex, ey, col, type === 'special' ? 18 : 14);
+
+  if (defender.hp <= 0) {
+    setTimeout(() => endRound(attacker), 300);
+  }
+}
+
+function showHitEffect(text, x, y, color, size) {
+  const canvas = document.getElementById('game-canvas');
+  const el = document.createElement('div');
+  el.className = 'hit-effect';
+  el.textContent = text;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  el.style.color = color;
+  el.style.fontSize = (size || 14) + 'px';
+  el.style.textShadow = `2px 2px 0 #000, 0 0 10px ${color}`;
+  canvas.appendChild(el);
+  setTimeout(() => el.remove(), 900);
+}
+
+function showCombo(count, x, y) {
+  const disp = document.getElementById('combo-display');
+  disp.style.display = 'block';
+  disp.innerHTML = `${count} HIT COMBO!<br><span style="font-size:8px;color:#ffaa00">+BONUS DMG</span>`;
+  clearTimeout(disp._timeout);
+  disp._timeout = setTimeout(() => { disp.style.display = 'none'; }, 1500);
+}
+
+// ===== PHYSICS =====
+function gameLoop() {
+  if (!gameRunning) return;
+
+  const p1 = state.p1;
+  const p2 = state.p2;
+
+  // Countdown cooldowns
+  if (p1.attackCooldown > 0) p1.attackCooldown--;
+  if (p2.attackCooldown > 0) p2.attackCooldown--;
+  if (p1.invincible > 0) p1.invincible--;
+  if (p2.invincible > 0) p2.invincible--;
+
+  // P1 movement
+  if (!p1.crouching) {
+    if (keys['KeyA']) p1.x = Math.max(20, p1.x - SPEED);
+    if (keys['KeyD']) p1.x = Math.min(CANVAS_W - FIGHTER_W - 20, p1.x + SPEED);
+  }
+  if (keys['KeyW'] && !p1.jumping && !p1.crouching) {
+    p1.vy = JUMP_FORCE;
+    p1.jumping = true;
+  }
+  p1.crouching = keys['KeyS'] && !p1.jumping;
+
+  // P2 movement
+  if (!p2.crouching) {
+    if (keys['ArrowLeft']) p2.x = Math.max(20, p2.x - SPEED);
+    if (keys['ArrowRight']) p2.x = Math.min(CANVAS_W - FIGHTER_W - 20, p2.x + SPEED);
+  }
+  if (keys['ArrowUp'] && !p2.jumping && !p2.crouching) {
+    p2.vy = JUMP_FORCE;
+    p2.jumping = true;
+  }
+  p2.crouching = keys['ArrowDown'] && !p2.jumping;
+
+  // Gravity
+  [p1, p2].forEach(p => {
+    if (p.jumping) {
+      p.y += p.vy;
+      p.vy -= GRAVITY;
+      if (p.y <= 0) {
+        p.y = 0;
+        p.vy = 0;
+        p.jumping = false;
+      }
+    }
+  });
+
+  // Push apart if overlapping
+  const minDist = FIGHTER_W + 10;
+  if (Math.abs(p1.x - p2.x) < minDist) {
+    const push = (minDist - Math.abs(p1.x - p2.x)) / 2;
+    if (p1.x < p2.x) {
+      p1.x -= push;
+      p2.x += push;
+    } else {
+      p1.x += push;
+      p2.x -= push;
+    }
+    p1.x = Math.max(20, Math.min(CANVAS_W - FIGHTER_W - 20, p1.x));
+    p2.x = Math.max(20, Math.min(CANVAS_W - FIGHTER_W - 20, p2.x));
+  }
+
+  // Facing direction
+  p1.facing = p2.x > p1.x ? 1 : -1;
+  p2.facing = p1.x > p2.x ? 1 : -1;
+
+  // Update DOM
+  updateFighterDOM(p1, 'p1');
+  updateFighterDOM(p2, 'p2');
+
+  requestAnimationFrame(gameLoop);
+}
+
+function updateFighterDOM(p, id) {
+  const el = p.el;
+  el.style.left = p.x + 'px';
+  el.style.bottom = (GROUND_Y + p.y) + 'px';
+
+  // Flip based on facing
+  if (id === 'p1') {
+    el.style.transform = p.facing === -1 ? 'scaleX(-1)' : '';
+  } else {
+    el.style.transform = p.facing === 1 ? 'scaleX(1)' : 'scaleX(-1)';
+  }
+
+  // Crouching squish
+  if (p.crouching) {
+    el.style.height = '70px';
+    el.style.bottom = (GROUND_Y + p.y - 10) + 'px';
+  } else {
+    el.style.height = '100px';
+  }
+
+  // Jump bounce
+  if (p.jumping && p.vy > 0) {
+    el.style.filter = 'drop-shadow(0 8px 12px rgba(0,0,0,0.5))';
+  } else {
+    el.style.filter = '';
+  }
+}
+
+function updateHealthBars() {
+  const p1Pct = (state.p1.hp / state.p1.maxHp) * 100;
+  const p2Pct = (state.p2.hp / state.p2.maxHp) * 100;
+
+  document.getElementById('p1-health-fill').style.width = p1Pct + '%';
+  document.getElementById('p2-health-fill').style.width = p2Pct + '%';
+
+  // Color change as HP drops
+  if (p1Pct < 25) {
+    document.getElementById('p1-health-fill').style.background = 'linear-gradient(90deg, #ff4400, #ff0000)';
+  } else if (p1Pct < 50) {
+    document.getElementById('p1-health-fill').style.background = 'linear-gradient(90deg, #ff8800, #ffdd00)';
+  }
+
+  if (p2Pct < 25) {
+    document.getElementById('p2-health-fill').style.background = 'linear-gradient(270deg, #ff0000, #880000)';
+  } else if (p2Pct < 50) {
+    document.getElementById('p2-health-fill').style.background = 'linear-gradient(270deg, #ff4400, #ff8800)';
+  }
+}
+
+function updateSpecialBars() {
+  document.getElementById('p1-special-fill').style.width = state.p1.special + '%';
+  document.getElementById('p2-special-fill').style.width = state.p2.special + '%';
+}
+
+// ===== ROUND MANAGEMENT =====
+function startGame() {
+  document.getElementById('overlay').style.display = 'none';
+
+  // FIGHT! text
+  const fightText = document.getElementById('fight-text');
+  fightText.style.display = 'block';
+  fightText.style.animation = 'zoom-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+  setTimeout(() => {
+    fightText.style.animation = '';
+    fightText.style.display = 'none';
+  }, 1400);
+
+  gameRunning = true;
+  resetRound();
+  startTimer();
+  requestAnimationFrame(gameLoop);
+}
+
+function resetRound() {
+  state.p1.hp = 100;
+  state.p2.hp = 100;
+  state.p1.special = 0;
+  state.p2.special = 0;
+  state.p1.x = 80;
+  state.p2.x = 760;
+  state.p1.y = 0;
+  state.p2.y = 0;
+  state.p1.vy = 0;
+  state.p2.vy = 0;
+  state.p1.jumping = false;
+  state.p2.jumping = false;
+  state.p1.crouching = false;
+  state.p2.crouching = false;
+  state.p1.combo = 0;
+  state.p2.combo = 0;
+  state.p1.el.className = 'fighter idle';
+  state.p2.el.className = 'fighter idle flipped';
+  timeLeft = 99;
+
+  document.getElementById('p1-health-fill').style.background = 'linear-gradient(90deg, #00ff88, #00cfff)';
+  document.getElementById('p2-health-fill').style.background = 'linear-gradient(270deg, #ff8800, #ff4444)';
+  updateHealthBars();
+  updateSpecialBars();
+}
+
+function startTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    document.getElementById('timer').textContent = timeLeft;
+    if (timeLeft <= 10) {
+      document.getElementById('timer').style.color = '#ff4444';
+      document.getElementById('timer').style.textShadow = '0 0 10px #ff4444';
+    }
+    if (timeLeft <= 0) {
+      clearInterval(timerInterval);
+      // Whoever has more HP wins
+      const winner = state.p1.hp >= state.p2.hp ? state.p1 : state.p2;
+      endRound(winner === state.p1 ? state.p1 : state.p2);
+    }
+  }, 1000);
+}
+
+function endRound(winner) {
+  gameRunning = false;
+  clearInterval(timerInterval);
+
+  const isP1Win = winner === state.p1;
+  if (isP1Win) p1Wins++;
+  else p2Wins++;
+
+  // KO animation on loser
+  const loser = isP1Win ? state.p2 : state.p1;
+  loser.el.classList.remove('idle');
+  loser.el.classList.add('ko');
+
+  const overlay = document.getElementById('overlay');
+  overlay.style.display = 'flex';
+
+  setTimeout(() => {
+    const winName = isP1Win ? 'RYUKO' : 'KAGE';
+    const winColor = isP1Win ? 'var(--p1-color)' : 'var(--p2-color)';
+    overlay.innerHTML = `
+      <h1 style="color:${winColor}; text-shadow: 0 0 20px ${winColor};">K.O.!</h1>
+      <div class="subtitle" style="color:${winColor}; margin-bottom:10px;">${winName} WINS!</div>
+      ${timeLeft <= 0 ? '<p style="color:#888;margin-bottom:6px;">TIME OVER</p>' : ''}
+      <p style="margin-bottom:12px;">ROUND ${roundNum} COMPLETE</p>
+      <div style="display:flex;gap:20px;margin-bottom:16px;">
+        <div style="text-align:center;">
+          <div style="font-size:7px;color:var(--p1-color);margin-bottom:4px;">RYUKO</div>
+          <div style="font-size:16px;color:var(--gold)">${p1Wins}</div>
+        </div>
+        <div style="font-size:20px;color:#444;align-self:center;">VS</div>
+        <div style="text-align:center;">
+          <div style="font-size:7px;color:var(--p2-color);margin-bottom:4px;">KAGE</div>
+          <div style="font-size:16px;color:var(--gold)">${p2Wins}</div>
+        </div>
+      </div>
+      ${p1Wins >= 2 || p2Wins >= 2
+        ? `<h1 style="font-size:20px;color:${winColor};">${winName} WINS THE MATCH!</h1>
+           <button id="start-btn" style="margin-top:12px;" onclick="newMatch()">▶ NEW MATCH</button>`
+        : `<button id="start-btn" onclick="nextRound()">▶ ROUND ${roundNum + 1}</button>`
+      }
+    `;
+
+    // Re-style the button
+    const btn = overlay.querySelector('#start-btn');
+    if (btn) {
+      btn.style.cssText = `
+        margin-top:16px; padding:12px 28px; font-family:'Press Start 2P',monospace;
+        font-size:11px; background:transparent; border:3px solid var(--gold);
+        color:var(--gold); cursor:pointer; letter-spacing:2px;
+        animation: pulse-btn 1.5s ease-in-out infinite;
+      `;
+    }
+  }, 1000);
+}
+
+function nextRound() {
+  roundNum++;
+  document.getElementById('timer').style.color = 'var(--gold)';
+  document.getElementById('timer').style.textShadow = '0 0 10px var(--gold)';
+  resetRound();
+
+  // Update round dots
+  if (p1Wins >= 1) document.getElementById('p1-r1').classList.add('won');
+  if (p2Wins >= 1) document.getElementById('p2-r1').classList.add('won');
+
+  const overlay = document.getElementById('overlay');
+  overlay.innerHTML = `
+    <h1 style="font-size:24px;">ROUND ${roundNum}</h1>
+    <div class="subtitle">FIGHT!</div>
+  `;
+
+  setTimeout(() => {
+    overlay.style.display = 'none';
+    gameRunning = true;
+    startTimer();
+    requestAnimationFrame(gameLoop);
+
+    const fightText = document.getElementById('fight-text');
+    fightText.style.display = 'block';
+    fightText.textContent = 'FIGHT!';
+    setTimeout(() => { fightText.style.display = 'none'; }, 1200);
+  }, 1500);
+}
+
+function newMatch() {
+  p1Wins = 0;
+  p2Wins = 0;
+  roundNum = 1;
+  document.getElementById('p1-r1').classList.remove('won');
+  document.getElementById('p2-r1').classList.remove('won');
+  document.getElementById('timer').style.color = 'var(--gold)';
+  document.getElementById('timer').style.textShadow = '0 0 10px var(--gold)';
+  resetRound();
+
+  const overlay = document.getElementById('overlay');
+  overlay.innerHTML = `
+    <h1>PIXEL CLASH</h1>
+    <p>A STREET FIGHTER TRIBUTE</p>
+    <div class="subtitle" style="margin-bottom:8px;">ROUND 1</div>
+    <p>PLAYER 1: A/D=MOVE  W=JUMP  S=CROUCH</p>
+    <p>Q=PUNCH  E=KICK  R=SPECIAL</p>
+    <p style="margin-top:6px;">PLAYER 2: ←/→=MOVE  ↑=JUMP  ↓=CROUCH</p>
+    <p>1=PUNCH  2=KICK  3=SPECIAL</p>
+    <button id="start-btn" onclick="startGame()" style="margin-top:16px;padding:12px 28px;font-family:'Press Start 2P',monospace;font-size:11px;background:transparent;border:3px solid var(--gold);color:var(--gold);cursor:pointer;letter-spacing:2px;">▶ FIGHT!</button>
+  `;
+  overlay.style.display = 'flex';
+}
+</script>
+</body>
+</html>
